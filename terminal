@@ -3,9 +3,11 @@ cd employee-management-app
 mkdir frontend backend 
 cd frontend
 rm -rf node_modules package-lock.json
-npx create-react-app . --template typescript
-npm install --legacy-peer-deps @tanstack/react-query @tanstack/react-query-devtools axios tailwindcss @headlessui/react @heroicons/react 
-npm install @types/react @types/react-dom @types/node react-router-dom@6
+npx create-next-app@latest . --typescript --tailwind --eslint --app
+npm install @headlessui/react @heroicons/react @tanstack/react-query axios
+mkdir -p src/components
+mkdir -p src/contexts
+npm install --legacy-peer-deps @tanstack/react-query @tanstack/react-query-devtools @types/react @types/react-dom @types/node react-router-dom@6
 npm install --save-dev @types/react @types/react-dom
 npm install --save-dev @types/jest @testing-library/react @testing-library/jest-dom
 npm install --save-dev @types/react @types/react-dom @types/testing-library__jest-dom
@@ -13,4 +15,29 @@ npm install --save-dev @testing-library/react @types/testing-library__react
 npm install --save-dev @types/react-router-dom
 npm install --save-dev @types/axios
 npm install web-vitals
-npm install 
+npm install next@latest
+npm install
+
+# 必要なディレクトリ構造を作成
+mkdir -p src/app
+mkdir -p src/components
+mkdir -p src/contexts
+
+# 基本的なファイルを作成
+touch src/app/layout.tsx
+touch src/app/page.tsx
+touch src/app/globals.css 
+
+# 古いCreate React Appのファイルを削除
+rm -f src/App.test.tsx
+rm -f src/reportWebVitals.ts
+rm -f src/App.tsx
+rm -f src/index.tsx
+rm -f src/setupTests.ts
+rm -f src/logo.svg 
+
+# ビルドを実行
+npm run build
+
+# ビルドが成功したら、ローカルで確認
+npm run start 
