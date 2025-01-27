@@ -23,6 +23,7 @@ class EmployeeUpdate(BaseModel):
     name: Optional[str] = None
     department: Optional[str] = None
     icon_url: Optional[str] = None
+    password: Optional[str] = None
 
 class PasswordReset(BaseModel):
     email: EmailStr
@@ -36,4 +37,7 @@ class EmployeeResponse(BaseModel):
     role: str
 
     class Config:
-        orm_mode = True 
+        orm_mode = True
+
+class Message(BaseModel):
+    message: str 
