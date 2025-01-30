@@ -17,7 +17,7 @@ export function EmployeeList() {
     queryKey: ['employees'],
     queryFn: async (): Promise<Employee[]> => {
       const token = localStorage.getItem('token');
-      const response = await axios.get<Employee[]>('http://localhost:8000/employees', {
+      const response = await axios.get<Employee[]>('http://localhost:8001/employees', {
         headers: { Authorization: `Bearer ${token}` }
       });
       return response.data;

@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post<TokenResponse>('http://localhost:8000/token', {
+      const response = await axios.post<TokenResponse>('http://localhost:8001/token', {
         username: email,
         password: password,
       });

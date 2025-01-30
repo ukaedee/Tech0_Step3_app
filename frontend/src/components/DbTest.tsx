@@ -9,7 +9,7 @@ export function DbTest() {
 
   const testConnection = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/test-db');
+      const response = await axios.get('http://localhost:8001/test-db');
       setStatus('接続成功！');
       setError('');
     } catch (err) {

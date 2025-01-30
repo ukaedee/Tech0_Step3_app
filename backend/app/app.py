@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from datetime import timedelta
 from . import models, schemas, database, auth
 from .database import engine
@@ -18,7 +19,7 @@ app = FastAPI()
 # CORSの設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # フロントエンドのURL
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # フロントエンドのURL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -181,10 +182,12 @@ async def reset_password(
 @app.get("/test-db")
 async def test_db_connection(db: Session = Depends(database.get_db)):
     try:
-        # 簡単なクエリを実行してDB接続をテスト
-        result = db.execute("SELECT 1").first()
+        # 明示的にtextを使用してSQLクエリを実行
+        result = db.execute(text("SELECT 1"))
+        result.scalar()  # 結果を取得
         return {"status": "success", "message": "Database connection successful"}
     except Exception as e:
+        print(f"Database error: {str(e)}")  # エラーをログに出力
         raise HTTPException(
             status_code=500,
             detail=f"Database connection failed: {str(e)}"

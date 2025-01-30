@@ -19,7 +19,7 @@ export const EmployeeEdit: React.FC<{ employeeId: string }> = ({ employeeId }) =
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://localhost:8000/employees/${employeeId}`,
+        `http://localhost:8001/employees/${employeeId}`,
         formData,
         {
           headers: { Authorization: `Bearer ${token}` }
