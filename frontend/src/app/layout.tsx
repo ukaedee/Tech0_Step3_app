@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { AuthProvider } from '@/contexts/AuthContext'
+import { ClientLayout } from './client-layout'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -13,12 +13,12 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: JSX.Element
 }) {
   return (
     <html lang="ja">
       <body className={inter.className}>
-        <AuthProvider>{children}</AuthProvider>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   )

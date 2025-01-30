@@ -176,4 +176,16 @@ async def reset_password(
     # メール送信
     await send_password_reset_email(employee.email, temp_password)
     
-    return {"message": "仮パスワードを送信しました"} 
+    return {"message": "仮パスワードを送信しました"}
+
+@app.get("/test-db")
+async def test_db_connection(db: Session = Depends(database.get_db)):
+    try:
+        # 簡単なクエリを実行してDB接続をテスト
+        result = db.execute("SELECT 1").first()
+        return {"status": "success", "message": "Database connection successful"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database connection failed: {str(e)}"
+        ) 
