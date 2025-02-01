@@ -19,10 +19,11 @@ app = FastAPI()
 # CORSの設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # フロントエンドのURL
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 @app.get("/")
@@ -84,8 +85,10 @@ async def register_employee(
         expires_delta=access_token_expires
     )
     
-    # ウェルカムメールを送信
-    await send_welcome_email(db_employee.email, db_employee.name, temp_password)
+    # ウェルカムメールを送信（一時的にコメントアウト）
+    # await send_welcome_email(db_employee.email, db_employee.name, temp_password)
+    
+    print(f"仮パスワード: {temp_password}")  # デバッグ用に仮パスワードを表示
     
     return {"access_token": access_token, "token_type": "bearer"}
 

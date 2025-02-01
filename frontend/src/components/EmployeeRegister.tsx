@@ -23,14 +23,22 @@ export function EmployeeRegister() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
+      console.log('送信するデータ:', formData); // デバッグ用
       const response = await axios.post(
         'http://localhost:8001/register',
-        formData,
         {
-          headers: { Authorization: `Bearer ${token}` }
+          employee_id: formData.employee_id,
+          name: formData.name,
+          email: formData.email,
+          role: formData.role
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
         }
       );
+      console.log('レスポンス:', response.data); // デバッグ用
       setSuccess('従業員を登録しました。仮パスワードが登録されたメールアドレスに送信されます。');
       setError('');
       // フォームをリセット
@@ -40,8 +48,9 @@ export function EmployeeRegister() {
         email: '',
         role: 'employee'
       });
-    } catch (err) {
-      setError('登録に失敗しました: ' + (err as Error).message);
+    } catch (err: any) {
+      console.error('エラー詳細:', err.response || err); // デバッグ用
+      setError('登録に失敗しました: ' + (err.response?.data?.detail || err.message));
       setSuccess('');
     }
   };
