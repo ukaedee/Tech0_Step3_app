@@ -14,6 +14,8 @@ import {
   Link,
 } from '@mui/material';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+
 export default function LoginPage() {
   const [formData, setFormData] = useState({
     email: '',
@@ -27,7 +29,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:8001/token', 
+      const response = await axios.post(`${API_URL}/token`, 
         new URLSearchParams({
           username: formData.email,
           password: formData.password,
@@ -42,7 +44,7 @@ export default function LoginPage() {
       localStorage.setItem('token', access_token);
 
       // ユーザー情報を取得
-      const userResponse = await axios.get('http://localhost:8001/me', {
+      const userResponse = await axios.get(`${API_URL}/me`, {
         headers: { Authorization: `Bearer ${access_token}` },
       });
 
