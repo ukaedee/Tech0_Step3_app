@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import timedelta
+from datetime import timedelta, datetime
 from . import models, schemas, database, auth
 from .database import engine
 from typing import List
@@ -11,6 +11,7 @@ import secrets
 import aiofiles
 import os
 from .utils.email import send_password_reset_email, send_welcome_email
+from fastapi.staticfiles import StaticFiles
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -25,6 +26,14 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# 画像保存用のディレクトリを作成
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+# 静的ファイルのマウント
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, html=True), name="uploads")
 
 @app.get("/")
 def read_root():
@@ -71,6 +80,7 @@ async def register_employee(
         name=employee.name,
         email=employee.email,
         password=hashed_password,
+        temp_password=temp_password,  # 仮パスワードを保存
         role=employee.role
     )
     
@@ -92,9 +102,9 @@ async def register_employee(
     
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/me", response_model=schemas.EmployeeCreate)
+@app.get("/me", response_model=schemas.EmployeeResponse)
 async def read_users_me(current_user: models.Employee = Depends(auth.get_current_user)):
-    return current_user 
+    return current_user
 
 @app.get("/employees", response_model=List[schemas.EmployeeResponse])
 async def get_employees(current_user: models.Employee = Depends(auth.get_current_user),
@@ -194,4 +204,78 @@ async def test_db_connection(db: Session = Depends(database.get_db)):
         raise HTTPException(
             status_code=500,
             detail=f"Database connection failed: {str(e)}"
-        ) 
+        )
+
+@app.put("/me/profile", response_model=schemas.EmployeeResponse)
+async def update_profile(
+    profile: schemas.EmployeeProfileUpdate,
+    current_user: models.Employee = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    db_user = db.query(models.Employee).filter(models.Employee.id == current_user.id).first()
+    if profile.department is not None:
+        db_user.department = profile.department
+    if profile.icon_url is not None:
+        db_user.icon_url = profile.icon_url
+    
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.put("/me/password")
+async def change_password(
+    password_change: schemas.PasswordChange,
+    current_user: models.Employee = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    if not auth.verify_password(password_change.current_password, current_user.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="現在のパスワードが正しくありません"
+        )
+    
+    db_user = db.query(models.Employee).filter(models.Employee.id == current_user.id).first()
+    db_user.password = auth.get_password_hash(password_change.new_password)
+    db_user.temp_password = None  # 仮パスワードをクリア
+    
+    db.commit()
+    return {"message": "パスワードが更新されました"}
+
+@app.post("/upload-image")
+async def upload_image(
+    file: UploadFile = File(...),
+    current_user: models.Employee = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    # ファイル拡張子の確認
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in ['.jpg', '.jpeg', '.png', '.gif']:
+        raise HTTPException(
+            status_code=400,
+            detail="サポートされていないファイル形式です。(.jpg, .jpeg, .png, .gif のみ許可されています)"
+        )
+    
+    # ファイル名の生成（一意になるように）
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{current_user.employee_id}_{timestamp}{file_ext}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    
+    # ファイルの保存
+    try:
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="ファイルの保存に失敗しました"
+        )
+    
+    # ユーザーのicon_urlを更新
+    file_url = f"http://localhost:8001/uploads/{filename}"
+    db_user = db.query(models.Employee).filter(models.Employee.id == current_user.id).first()
+    db_user.icon_url = file_url
+    db.commit()
+    db.refresh(db_user)
+    
+    return {"url": file_url} 

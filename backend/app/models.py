@@ -11,6 +11,7 @@ class Employee(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False)
     password = Column(String(255), nullable=False)
+    temp_password = Column(String(255), nullable=True)
     icon_url = Column(Text, nullable=True)
     department = Column(Text, nullable=True)
     role = Column(Enum('admin', 'employee', name='role_types'), default='employee')

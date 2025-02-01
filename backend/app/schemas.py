@@ -40,4 +40,12 @@ class EmployeeResponse(BaseModel):
         orm_mode = True
 
 class Message(BaseModel):
-    message: str 
+    message: str
+
+class EmployeeProfileUpdate(BaseModel):
+    department: Optional[str] = None
+    icon_url: Optional[str] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str 
