@@ -3,6 +3,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
+import { useAuth } from '@/context/AuthContext';
 
 interface Employee {
   employee_id: string;
@@ -13,17 +14,21 @@ interface Employee {
 }
 
 export function EmployeeList() {
+  const { token } = useAuth();
+
   const { data: employees, isLoading, error } = useQuery<Employee[]>({
-    queryKey: ['employees'],
+    queryKey: ['employees', token],
     queryFn: async (): Promise<Employee[]> => {
-      const token = localStorage.getItem('token');
+      if (!token) throw new Error('認証が必要です');
       const response = await axios.get<Employee[]>('http://localhost:8001/employees', {
         headers: { Authorization: `Bearer ${token}` }
       });
       return response.data;
-    }
+    },
+    enabled: !!token
   });
 
+  if (!token) return <div>認証が必要です</div>;
   if (isLoading) return <div>読み込み中...</div>;
   if (error) return <div>エラーが発生しました</div>;
 

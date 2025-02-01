@@ -15,6 +15,11 @@ export default function RootLayout({
 }: {
   children: JSX.Element
 }) {
+  console.log('RootLayout props:', {
+    children: JSON.stringify(children, null, 2),
+    inter: JSON.stringify(inter, null, 2)
+  });
+
   return (
     <html lang="ja">
       <body className={inter.className}>
@@ -22,4 +27,4 @@ export default function RootLayout({
       </body>
     </html>
   )
-} 
+}
