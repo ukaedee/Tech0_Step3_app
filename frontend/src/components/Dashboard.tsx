@@ -236,9 +236,18 @@ const Dashboard: React.FC = () => {
                   <Button
                     variant="outlined"
                     onClick={() => setOpenPasswordDialog(true)}
+                    sx={{ mr: 1 }}
                   >
                     パスワード変更
                   </Button>
+                  {userInfo.role === 'admin' && (
+                    <Button
+                      variant="outlined"
+                      onClick={() => router.push('/admin/login')}
+                    >
+                      従業員管理
+                    </Button>
+                  )}
                 </Box>
               </Paper>
             </Grid>

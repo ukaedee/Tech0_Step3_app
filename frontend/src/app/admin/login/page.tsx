@@ -11,10 +11,9 @@ import {
   Button,
   Alert,
   Paper,
-  Link,
 } from '@mui/material';
 
-export default function LoginPage() {
+export default function AdminLoginPage() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -41,12 +40,18 @@ export default function LoginPage() {
       const { access_token } = response.data;
       localStorage.setItem('token', access_token);
 
-      // ユーザー情報を取得
+      // ユーザー情報を取得して管理者かチェック
       const userResponse = await axios.get('http://localhost:8001/me', {
         headers: { Authorization: `Bearer ${access_token}` },
       });
 
-      router.push('/dashboard');
+      if (userResponse.data.role !== 'admin') {
+        setError('管理者権限が必要です');
+        localStorage.removeItem('token');
+        return;
+      }
+
+      router.push('/register');
     } catch (err: any) {
       setError('メールアドレスまたはパスワードが正しくありません');
     }
@@ -63,7 +68,7 @@ export default function LoginPage() {
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom align="center">
-          従業員ログイン
+          管理者ログイン
         </Typography>
         
         {error && (
@@ -105,12 +110,6 @@ export default function LoginPage() {
             </Button>
           </form>
         </Paper>
-
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <Link href="/admin/login" underline="hover">
-            管理者の方はこちら
-          </Link>
-        </Box>
       </Box>
     </Container>
   );
