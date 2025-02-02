@@ -14,7 +14,7 @@ app.add_middleware(
         "http://localhost:8080",  # ローカルバックエンド
         "http://127.0.0.1:3000",
         "http://127.0.0.1:8080",
-        "https://*.railway.app",  # Railway.app上の全てのサービス
+        "https://tech0step3app-production.up.railway.app/",  # Railway.app上の全てのサービス
     ],
     allow_credentials=True,
     allow_methods=["*"],
