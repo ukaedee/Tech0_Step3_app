@@ -24,6 +24,15 @@ import {
   DialogActions,
 } from '@mui/material';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
+// アイコンURLを修正する関数
+const getFullIconUrl = (iconUrl: string | undefined) => {
+  if (!iconUrl) return undefined;
+  if (iconUrl.startsWith('http')) return iconUrl;
+  return `${API_URL}${iconUrl}`;
+};
+
 interface UserInfo {
   employee_id: string;
   name: string;
@@ -57,7 +66,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       if (!token) {
         router.push('/login');
         return;
@@ -65,17 +74,21 @@ const Dashboard: React.FC = () => {
 
       try {
         const [userResponse, employeesResponse] = await Promise.all([
-          axios.get('http://localhost:8001/me', {
+          axios.get(`${API_URL}/me`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          axios.get('http://localhost:8001/employees', {
+          axios.get(`${API_URL}/employees`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
 
+        console.log('User info:', userResponse.data);
+        console.log('Employees:', employeesResponse.data);
+
         setUserInfo(userResponse.data);
         setEmployees(employeesResponse.data);
       } catch (err: any) {
+        console.error('Error fetching data:', err);
         setError('情報の取得に失敗しました');
         if (err.response?.status === 401) {
           router.push('/login');
@@ -89,19 +102,19 @@ const Dashboard: React.FC = () => {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
     router.push('/login');
   };
 
   const handleProfileUpdate = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       const updatedProfile = {
         department: profile.department,
         icon_url: tempIconUrl || profile.icon_url,
       };
       await axios.put(
-        'http://localhost:8001/me/profile',
+        `${API_URL}/me/profile`,
         updatedProfile,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -122,9 +135,9 @@ const Dashboard: React.FC = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       await axios.put(
-        'http://localhost:8001/me/password',
+        `${API_URL}/me/password`,
         {
           current_password: password.current,
           new_password: password.new,
@@ -155,12 +168,12 @@ const Dashboard: React.FC = () => {
       // 自動アップロード
       try {
         setUploadProgress(true);
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         const formData = new FormData();
         formData.append('file', file);
 
         const response = await axios.post(
-          'http://localhost:8001/upload-image',
+          `${API_URL}/upload-image`,
           formData,
           {
             headers: {
@@ -207,80 +220,76 @@ const Dashboard: React.FC = () => {
             {error}
           </Alert>
         )}
-        {userInfo && (
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  ユーザー情報
-                </Typography>
-                <Box sx={{ mt: 2 }}>
-                  <Avatar
-                    src={userInfo.icon_url}
-                    sx={{ width: 100, height: 100, mb: 2 }}
-                  />
-                  <Typography><strong>従業員ID:</strong> {userInfo.employee_id}</Typography>
-                  <Typography><strong>名前:</strong> {userInfo.name}</Typography>
-                  <Typography><strong>メールアドレス:</strong> {userInfo.email}</Typography>
-                  <Typography><strong>役割:</strong> {userInfo.role}</Typography>
-                  <Typography><strong>部署:</strong> {userInfo.department || '未設定'}</Typography>
-                </Box>
-                <Box sx={{ mt: 2 }}>
-                  <Button
-                    variant="outlined"
-                    onClick={() => setOpenProfileDialog(true)}
-                    sx={{ mr: 1 }}
-                  >
-                    プロフィール編集
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={() => setOpenPasswordDialog(true)}
-                    sx={{ mr: 1 }}
-                  >
-                    パスワード変更
-                  </Button>
-                  {userInfo.role === 'admin' && (
-                    <Button
-                      variant="outlined"
-                      onClick={() => router.push('/admin/login')}
-                    >
-                      従業員管理
-                    </Button>
-                  )}
-                </Box>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  従業員一覧
-                </Typography>
-                <List>
-                  {employees.map((employee) => (
-                    <ListItem key={employee.employee_id}>
-                      <ListItemAvatar>
-                        <Avatar src={employee.icon_url} />
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={employee.name}
-                        secondary={`${employee.department || '部署未設定'} - ${employee.role}`}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            </Grid>
-          </Grid>
-        )}
         <Button
           variant="contained"
           color="primary"
           onClick={handleLogout}
-          sx={{ mt: 3 }}
+          sx={{ mb: 2 }}
         >
           ログアウト
         </Button>
+        {userInfo && (
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              ユーザー情報
+            </Typography>
+            <Box sx={{ mt: 2 }}>
+              <Avatar
+                src={getFullIconUrl(userInfo.icon_url)}
+                sx={{ width: 100, height: 100, mb: 2 }}
+              />
+              <Typography><strong>従業員ID:</strong> {userInfo.employee_id}</Typography>
+              <Typography><strong>名前:</strong> {userInfo.name}</Typography>
+              <Typography><strong>メールアドレス:</strong> {userInfo.email}</Typography>
+              <Typography><strong>役割:</strong> {userInfo.role}</Typography>
+              <Typography><strong>部署:</strong> {userInfo.department || '未設定'}</Typography>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={() => setOpenProfileDialog(true)}
+                sx={{ mr: 1 }}
+              >
+                プロフィール編集
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => setOpenPasswordDialog(true)}
+                sx={{ mr: 1 }}
+              >
+                パスワード変更
+              </Button>
+              {userInfo.role === 'admin' && (
+                <Button
+                  variant="outlined"
+                  onClick={() => router.push('/admin/login')}
+                >
+                  従業員管理
+                </Button>
+              )}
+            </Box>
+          </Paper>
+        )}
+        {employees.length > 0 && (
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              従業員一覧
+            </Typography>
+            <List>
+              {employees.map((employee) => (
+                <ListItem key={employee.employee_id}>
+                  <ListItemAvatar>
+                    <Avatar src={getFullIconUrl(employee.icon_url)} />
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={employee.name}
+                    secondary={`${employee.department || '部署未設定'} - ${employee.email}`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+        )}
 
         {/* プロフィール編集ダイアログ */}
         <Dialog 

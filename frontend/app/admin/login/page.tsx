@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
 import {
   Container,
   Box,
@@ -11,7 +10,9 @@ import {
   Button,
   Alert,
   Paper,
+  CircularProgress,
 } from '@mui/material';
+import axiosInstance from '@/lib/axios';
 
 export default function AdminLoginPage() {
   const [formData, setFormData] = useState({
@@ -19,41 +20,49 @@ export default function AdminLoginPage() {
     password: '',
   });
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:8001/token', 
-        new URLSearchParams({
-          username: formData.email,
-          password: formData.password,
-        }).toString(),
+      const formBody = new URLSearchParams();
+      formBody.append('username', formData.email);
+      formBody.append('password', formData.password);
+      formBody.append('grant_type', 'password');
+
+      const response = await axiosInstance.post('/token', 
+        formBody,
         {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-          },
+            'Accept': 'application/json'
+          }
         }
       );
+      
       const { access_token } = response.data;
-      localStorage.setItem('token', access_token);
+      localStorage.setItem('access_token', access_token);
 
       // ユーザー情報を取得して管理者かチェック
-      const userResponse = await axios.get('http://localhost:8001/me', {
-        headers: { Authorization: `Bearer ${access_token}` },
-      });
+      const userResponse = await axiosInstance.get('/me');
 
       if (userResponse.data.role !== 'admin') {
         setError('管理者権限が必要です');
-        localStorage.removeItem('token');
+        localStorage.removeItem('access_token');
         return;
       }
 
       router.push('/register');
     } catch (err: any) {
+      console.error('Login error:', err);
       setError('メールアドレスまたはパスワードが正しくありません');
+      localStorage.removeItem('access_token');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -67,8 +76,11 @@ export default function AdminLoginPage() {
   return (
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center">
+        <Typography variant="h4" component="h1" gutterBottom align="center" sx={{ fontWeight: 'bold', color: '#1976d2' }}>
           管理者ログイン
+        </Typography>
+        <Typography variant="subtitle1" align="center" sx={{ mb: 4, color: 'text.secondary' }}>
+          管理者専用のログインページです
         </Typography>
         
         {error && (
@@ -104,9 +116,29 @@ export default function AdminLoginPage() {
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              disabled={isLoading}
+              sx={{ 
+                mt: 3, 
+                mb: 2,
+                backgroundColor: '#1976d2 !important',
+                color: 'white !important',
+                padding: '6px 16px !important',
+                fontSize: '14px !important',
+                fontWeight: 500,
+                textTransform: 'none',
+                '&:hover': {
+                  backgroundColor: '#1565c0 !important'
+                },
+                '&:disabled': {
+                  backgroundColor: '#ccc !important',
+                  color: 'rgba(255,255,255,0.7) !important'
+                },
+                '& .MuiCircularProgress-root': {
+                  color: 'white !important'
+                }
+              }}
             >
-              ログイン
+              {isLoading ? <CircularProgress size={24} /> : 'ログイン'}
             </Button>
           </form>
         </Paper>

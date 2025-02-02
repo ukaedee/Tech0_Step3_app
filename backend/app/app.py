@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = APIRouter()  # FastAPIをAPIRouterに変更
 
 # CORSの設定
 app.add_middleware(
@@ -121,6 +121,7 @@ async def register_employee(
 
 @app.get("/me", response_model=schemas.EmployeeResponse)
 async def read_users_me(current_user: models.Employee = Depends(auth.get_current_user)):
+    print(f"Getting user info for: {current_user.email}")
     return current_user
 
 @app.get("/employees", response_model=List[schemas.EmployeeResponse])

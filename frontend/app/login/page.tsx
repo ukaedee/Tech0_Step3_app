@@ -11,10 +11,9 @@ import {
   Button,
   Alert,
   Paper,
-  Link,
 } from '@mui/material';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -29,27 +28,49 @@ export default function LoginPage() {
     setError('');
 
     try {
+      console.log('Login attempt:', {
+        url: `${API_URL}/token`,
+        email: formData.email
+      });
+
       const response = await axios.post(`${API_URL}/token`, 
         new URLSearchParams({
           username: formData.email,
           password: formData.password,
-        }).toString(),
+          grant_type: 'password'
+        }),
         {
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/x-www-form-urlencoded'
           },
+          withCredentials: true
         }
       );
+
+      console.log('Login response:', response.data);
+      
       const { access_token } = response.data;
-      localStorage.setItem('token', access_token);
+      if (!access_token) {
+        throw new Error('トークンが見つかりません');
+      }
+
+      localStorage.setItem('access_token', access_token);
 
       // ユーザー情報を取得
       const userResponse = await axios.get(`${API_URL}/me`, {
-        headers: { Authorization: `Bearer ${access_token}` },
+        headers: { 
+          'Authorization': `Bearer ${access_token}`
+        }
       });
 
+      console.log('User info:', userResponse.data);
       router.push('/dashboard');
     } catch (err: any) {
+      console.error('Login error:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       setError('メールアドレスまたはパスワードが正しくありません');
     }
   };
@@ -59,6 +80,10 @@ export default function LoginPage() {
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleAdminClick = () => {
+    window.location.href = '/admin/login';
   };
 
   return (
@@ -109,9 +134,18 @@ export default function LoginPage() {
         </Paper>
 
         <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <Link href="/admin/login" underline="hover">
+          <Button
+            onClick={handleAdminClick}
+            sx={{
+              color: '#1976d2',
+              '&:hover': {
+                backgroundColor: 'transparent',
+                textDecoration: 'underline'
+              }
+            }}
+          >
             管理者の方はこちら
-          </Link>
+          </Button>
         </Box>
       </Box>
     </Container>
