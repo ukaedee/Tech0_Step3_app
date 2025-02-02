@@ -1,7 +1,6 @@
 'use client'
 
 import { ReactNode, Suspense } from 'react'
-import { AuthProvider } from '@/context/AuthContext'
 import { Providers } from './providers'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 
@@ -33,9 +32,7 @@ export function ClientLayout({ children }: { children: ReactNode }) {
     <ErrorBoundary FallbackComponent={ErrorFallback}>
       <Suspense fallback={<LoadingFallback />}>
         <Providers>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
+          {children}
         </Providers>
       </Suspense>
     </ErrorBoundary>

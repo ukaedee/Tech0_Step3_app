@@ -24,13 +24,15 @@ import {
   DialogActions,
 } from '@mui/material';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // アイコンURLを修正する関数
 const getFullIconUrl = (iconUrl: string | undefined) => {
   if (!iconUrl) return undefined;
   if (iconUrl.startsWith('http')) return iconUrl;
-  return `${API_URL}${iconUrl}`;
+  // APIのベースURLを使用して完全なURLを生成
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  return `${baseUrl}${iconUrl}`;
 };
 
 interface UserInfo {
@@ -262,7 +264,7 @@ const Dashboard: React.FC = () => {
               {userInfo.role === 'admin' && (
                 <Button
                   variant="outlined"
-                  onClick={() => router.push('/admin/login')}
+                  onClick={() => router.push('/admin/dashboard')}
                 >
                   従業員管理
                 </Button>

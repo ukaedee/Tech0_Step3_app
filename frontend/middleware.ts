@@ -2,11 +2,17 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('auth-token')
+  // RSCリクエストはスキップ
+  if (request.nextUrl.search.includes('_rsc')) {
+    return NextResponse.next()
+  }
+
+  const token = request.cookies.get('access_token')?.value
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') || 
                     request.nextUrl.pathname.startsWith('/register') ||
                     request.nextUrl.pathname.startsWith('/admin/login')
   const isApiRoute = request.nextUrl.pathname.startsWith('/api')
+  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
 
   // API routes are handled separately
   if (isApiRoute) {
@@ -20,7 +26,7 @@ export function middleware(request: NextRequest) {
 
   // Redirect to dashboard if token exists and trying to access auth pages
   if (token && isAuthPage) {
-    return NextResponse.redirect(new URL('/', request.url))
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return NextResponse.next()

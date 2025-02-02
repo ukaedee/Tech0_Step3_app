@@ -7,12 +7,18 @@ from sqlalchemy.orm import Session
 from . import models, schemas, database
 import os
 import bcrypt
+import traceback
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = os.getenv("JWT_ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24時間に延長
+
+# デバッグ用出力
+print(f"SECRET_KEY: {SECRET_KEY}")
+print(f"ALGORITHM: {ALGORITHM}")
+print(f"ACCESS_TOKEN_EXPIRE_MINUTES: {ACCESS_TOKEN_EXPIRE_MINUTES}")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -37,14 +43,20 @@ def get_password_hash(password: str) -> str:
     ).decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    try:
+        to_encode = data.copy()
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(minutes=15)
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        print(f"Created token with data: {to_encode}")
+        return encoded_jwt
+    except Exception as e:
+        print(f"Error creating access token: {str(e)}")
+        print(traceback.format_exc())
+        raise
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
     print(f"Authenticating user with token: {token[:10]}...")
@@ -58,16 +70,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         print(f"Token payload: {payload}")
         email: str = payload.get("sub")
+        role: str = payload.get("role")
         if email is None:
             print("No email found in token")
             raise credentials_exception
-        token_data = schemas.TokenData(email=email)
+        token_data = schemas.TokenData(email=email, role=role)
         print(f"Token data: {token_data}")
     except JWTError as e:
         print(f"JWT decode error: {str(e)}")
+        print(traceback.format_exc())
         raise credentials_exception
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
+        print(traceback.format_exc())
         raise credentials_exception
     
     print(f"Looking up user with email: {email}")
@@ -75,6 +90,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         print("User not found in database")
         raise credentials_exception
+
+    # トークンのロールとデータベースのロールを比較
+    if role and role != user.role:
+        print(f"Role mismatch: token={role}, db={user.role}")
+        raise credentials_exception
+
     print(f"Found user: {user.email} with role: {user.role}")
     return user
 

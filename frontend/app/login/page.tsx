@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
+import axiosInstance from '@/lib/axios';
 import {
   Container,
   Box,
@@ -12,8 +12,6 @@ import {
   Alert,
   Paper,
 } from '@mui/material';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -28,38 +26,57 @@ export default function LoginPage() {
     setError('');
 
     try {
-      console.log('Login attempt:', {
-        url: `${API_URL}/token`,
-        email: formData.email
+      // axiosInstanceの設定を確認
+      console.log('Axios config:', {
+        baseURL: axiosInstance.defaults.baseURL,
+        timeout: axiosInstance.defaults.timeout,
+        withCredentials: axiosInstance.defaults.withCredentials
       });
 
-      const response = await axios.post(`${API_URL}/token`, 
+      console.log('Login attempt:', {
+        url: '/token',
+        fullUrl: `${axiosInstance.defaults.baseURL}/token`,
+        email: formData.email,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json'
+        }
+      });
+
+      const response = await axiosInstance.post('/token', 
         new URLSearchParams({
           username: formData.email,
           password: formData.password,
           grant_type: 'password'
-        }),
+        }).toString(),
         {
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          withCredentials: true
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json'
+          }
         }
       );
 
       console.log('Login response:', response.data);
       
+      if (!response.data) {
+        throw new Error('レスポンスデータがありません');
+      }
+
       const { access_token } = response.data;
       if (!access_token) {
         throw new Error('トークンが見つかりません');
       }
 
+      // トークンをlocalStorageとCookieに保存
       localStorage.setItem('access_token', access_token);
+      document.cookie = `access_token=${access_token}; path=/; max-age=86400; samesite=lax`;
 
       // ユーザー情報を取得
-      const userResponse = await axios.get(`${API_URL}/me`, {
+      const userResponse = await axiosInstance.get('/me', {
         headers: { 
-          'Authorization': `Bearer ${access_token}`
+          'Authorization': `Bearer ${access_token}`,
+          'Accept': 'application/json'
         }
       });
 
@@ -69,9 +86,15 @@ export default function LoginPage() {
       console.error('Login error:', {
         message: err.message,
         response: err.response?.data,
-        status: err.response?.status
+        status: err.response?.status,
+        config: err.config
       });
-      setError('メールアドレスまたはパスワードが正しくありません');
+      
+      if (err.message === 'Network Error') {
+        setError('サーバーに接続できません。ネットワーク接続を確認してください。');
+      } else {
+        setError('メールアドレスまたはパスワードが正しくありません');
+      }
     }
   };
 

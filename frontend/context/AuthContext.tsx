@@ -1,7 +1,7 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useTransition } from 'react'
-import { parseCookies, setCookie, destroyCookie } from 'nookies'
+import { type ReactNode, createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface AuthState {
   isAuthenticated: boolean
@@ -12,7 +12,6 @@ interface AuthContextType extends AuthState {
   login: (token: string) => void
   logout: () => void
   isInitialized: boolean
-  isServerSide: boolean
   isLoading: boolean
 }
 
@@ -21,137 +20,115 @@ const defaultAuthState: AuthState = {
   token: null,
 }
 
-// サーバーサイドレンダリング時のデフォルト値
 const defaultContext: AuthContextType = {
   ...defaultAuthState,
   login: () => {},
   logout: () => {},
-  isInitialized: true,
-  isServerSide: typeof window === 'undefined',
-  isLoading: false
+  isInitialized: false,
+  isLoading: true
 }
 
 const AuthContext = createContext<AuthContextType>(defaultContext)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>(defaultAuthState)
   const [isInitialized, setIsInitialized] = useState(false)
-  const [isPending, startTransition] = useTransition()
-  const isServerSide = typeof window === 'undefined'
+  const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
 
-  // トークンの検証ロジックを分離
   const validateToken = useCallback((token: string | null): boolean => {
-    if (isServerSide) return false
     return Boolean(token && token.length > 0)
-  }, [isServerSide])
+  }, [])
 
-  // 認証状態の更新を一元化
   const updateAuthState = useCallback((token: string | null) => {
-    if (isServerSide) return
-    startTransition(() => {
-      const isValid = validateToken(token)
-      setAuthState({
-        isAuthenticated: isValid,
-        token: isValid ? token : null
-      })
+    const isValid = validateToken(token)
+    setAuthState({
+      isAuthenticated: isValid,
+      token: isValid ? token : null
     })
-  }, [isServerSide, validateToken])
+  }, [validateToken])
 
   useEffect(() => {
-    if (isServerSide) {
-      setIsInitialized(true)
-      return
-    }
-
-    let mounted = true
-
     const initializeAuth = async () => {
+      if (typeof window === 'undefined') return // SSR 環境では処理をスキップ
+
+      setIsLoading(true)
+
       try {
-        const cookies = parseCookies()
-        const storedToken = cookies['auth-token']
+        const storedToken = localStorage.getItem('access_token')
+        console.log('Stored token:', storedToken) // デバッグ用
+
         if (storedToken && validateToken(storedToken)) {
-          console.log('Auth state restored from cookie')
+          console.log('Auth state restored from localStorage')
           updateAuthState(storedToken)
         } else {
-          console.log('No valid token found in cookie')
+          console.log('No valid token found in localStorage')
+          // トークンがない場合はCookieも削除
+          document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
           updateAuthState(null)
+          if (window.location.pathname !== '/login') {
+            router.push('/login')
+          }
         }
       } catch (error) {
         console.error('Error initializing auth state:', error)
         updateAuthState(null)
       } finally {
-        if (mounted) {
-          startTransition(() => {
-            setIsInitialized(true)
-          })
-        }
+        setIsInitialized(true)
+        setIsLoading(false)
       }
     }
 
     initializeAuth()
-
-    return () => {
-      mounted = false
-    }
-  }, [isServerSide, validateToken, updateAuthState])
+  }, [validateToken, updateAuthState, router])
 
   const login = useCallback((newToken: string) => {
-    if (isServerSide) return
-
+    setIsLoading(true)
     try {
       if (!validateToken(newToken)) {
         throw new Error('Invalid token provided')
       }
-      // Set cookie with appropriate options
-      setCookie(null, 'auth-token', newToken, {
-        maxAge: 30 * 24 * 60 * 60, // 30 days
-        path: '/',
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
-      })
+      localStorage.setItem('access_token', newToken)
       updateAuthState(newToken)
       console.log('Login successful')
     } catch (error) {
       console.error('Error during login:', error)
-      destroyCookie(null, 'auth-token')
+      localStorage.removeItem('access_token')
       updateAuthState(null)
     }
-  }, [isServerSide, validateToken, updateAuthState])
+    setIsLoading(false)
+  }, [validateToken, updateAuthState])
 
   const logout = useCallback(() => {
-    if (isServerSide) return
-
+    setIsLoading(true)
     try {
-      destroyCookie(null, 'auth-token')
+      localStorage.removeItem('access_token')
       updateAuthState(null)
+      router.push('/login') // useRouter を使用
       console.log('Logout successful')
     } catch (error) {
       console.error('Error during logout:', error)
     }
-  }, [isServerSide, updateAuthState])
+    setIsLoading(false)
+  }, [updateAuthState, router])
 
   const contextValue = {
     ...authState,
     login,
     logout,
     isInitialized,
-    isServerSide,
-    isLoading: isPending
-  }
-
-  // サーバーサイドレンダリング時は子コンポーネントをそのまま返す
-  if (isServerSide) {
-    return <>{children}</>
-  }
-
-  // クライアントサイドで初期化中の場合も子コンポーネントをそのまま返す
-  if (!isInitialized) {
-    return <>{children}</>
+    isLoading
   }
 
   return (
     <AuthContext.Provider value={contextValue}>
-      {children}
+      {isLoading ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   )
 }
@@ -162,15 +139,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
-}
-
-// サーバーサイドでの認証状態の取得
-export async function getServerSideAuth(ctx?: any) {
-  const cookies = parseCookies(ctx)
-  const token = cookies['auth-token']
-  
-  return {
-    isAuthenticated: Boolean(token),
-    token: token || null
-  }
 }
