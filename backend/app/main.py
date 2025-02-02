@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import os
+
+print(f"PORT環境変数: {os.environ.get('PORT')}")
 
 app = FastAPI()
 
@@ -7,9 +10,11 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # 開発環境
-        "https://tech0-step3-app.vercel.app",  # 本番環境
-        "https://tech0-step3-app-git-main-ukaedee.vercel.app"  # プレビュー環境
+        "http://localhost:3000",  # ローカル開発環境
+        "http://localhost:8080",  # ローカルバックエンド
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8080",
+        "https://*.railway.app",  # Railway.app上の全てのサービス
     ],
     allow_credentials=True,
     allow_methods=["*"],
