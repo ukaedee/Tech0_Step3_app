@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import axiosInstance from '@/lib/axios';
 import {
   Container,
   Box,
@@ -45,6 +46,7 @@ interface UserInfo {
 }
 
 const Dashboard: React.FC = () => {
+  const { logout } = useAuth();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [employees, setEmployees] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,20 +70,10 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
       try {
         const [userResponse, employeesResponse] = await Promise.all([
-          axios.get(`${API_URL}/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`${API_URL}/employees`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          axiosInstance.get('/me'),
+          axiosInstance.get('/employees'),
         ]);
 
         console.log('User info:', userResponse.data);
@@ -100,12 +92,29 @@ const Dashboard: React.FC = () => {
       }
     };
 
+    if (!localStorage.getItem('access_token')) {
+      router.push('/login');
+      return;
+    }
+
     fetchData();
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    router.push('/login');
+  const handleLogout = async () => {
+    try {
+      // まずログアウト処理を実行
+      await logout();
+      
+      // 少し待ってからリダイレクト
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // window.locationを使用して強制的にリダイレクト
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      // エラーが発生しても強制的にリダイレクト
+      window.location.href = '/login';
+    }
   };
 
   const handleProfileUpdate = async () => {
@@ -115,8 +124,8 @@ const Dashboard: React.FC = () => {
         department: profile.department,
         icon_url: tempIconUrl || profile.icon_url,
       };
-      await axios.put(
-        `${API_URL}/me/profile`,
+      await axiosInstance.put(
+        '/me/profile',
         updatedProfile,
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -130,28 +139,58 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const validatePassword = (password: string): boolean => {
+    // 最低8文字、英数字を含む
+    return password.length >= 8 && /[A-Za-z]/.test(password) && /[0-9]/.test(password);
+  };
+
   const handlePasswordChange = async () => {
+    setError('');
+    console.log('パスワード変更処理開始');
+
+    // バリデーション
+    if (!password.current || !password.new || !password.confirm) {
+      setError('すべての項目を入力してください');
+      return;
+    }
+
     if (password.new !== password.confirm) {
       setError('新しいパスワードが一致しません');
       return;
     }
 
+    if (!validatePassword(password.new)) {
+      setError('新しいパスワードは8文字以上で、英字と数字を含める必要があります');
+      return;
+    }
+
+    if (password.current === password.new) {
+      setError('新しいパスワードが現在のパスワードと同じです');
+      return;
+    }
+
     try {
-      const token = localStorage.getItem('access_token');
-      await axios.put(
-        `${API_URL}/me/password`,
-        {
-          current_password: password.current,
-          new_password: password.new,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      console.log('パスワード変更APIを呼び出し');
+      await axiosInstance.put('/me/password', {
+        current_password: password.current,
+        new_password: password.new,
+      });
+
+      // 成功時の処理
       setOpenPasswordDialog(false);
       setPassword({ current: '', new: '', confirm: '' });
-    } catch (err) {
-      setError('パスワードの更新に失敗しました');
+      // 成功メッセージを表示
+      alert('パスワードが正常に変更されました');
+      setError('');
+    } catch (err: any) {
+      console.error('Password change error:', err);
+      if (err.response?.status === 401) {
+        setError('現在のパスワードが正しくありません');
+      } else if (err.response?.data?.detail) {
+        setError(err.response.data.detail);
+      } else {
+        setError('パスワードの更新に失敗しました。もう一度お試しください');
+      }
     }
   };
 
@@ -174,8 +213,8 @@ const Dashboard: React.FC = () => {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await axios.post(
-          `${API_URL}/upload-image`,
+        const response = await axiosInstance.post(
+          '/upload-image',
           formData,
           {
             headers: {
@@ -214,22 +253,23 @@ const Dashboard: React.FC = () => {
   return (
     <Container maxWidth="md">
       <Box sx={{ mt: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          ダッシュボード
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Typography variant="h4" component="h1">
+            ダッシュボード
+          </Typography>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={handleLogout}
+          >
+            ログアウト
+          </Button>
+        </Box>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
         )}
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleLogout}
-          sx={{ mb: 2 }}
-        >
-          ログアウト
-        </Button>
         {userInfo && (
           <Paper sx={{ p: 3, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
@@ -344,9 +384,19 @@ const Dashboard: React.FC = () => {
         </Dialog>
 
         {/* パスワード変更ダイアログ */}
-        <Dialog open={openPasswordDialog} onClose={() => setOpenPasswordDialog(false)}>
+        <Dialog 
+          open={openPasswordDialog} 
+          onClose={() => setOpenPasswordDialog(false)}
+          maxWidth="sm"
+          fullWidth
+        >
           <DialogTitle>パスワード変更</DialogTitle>
           <DialogContent>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
             <TextField
               margin="dense"
               label="現在のパスワード"
@@ -362,6 +412,7 @@ const Dashboard: React.FC = () => {
               fullWidth
               value={password.new}
               onChange={(e) => setPassword({ ...password, new: e.target.value })}
+              helperText="8文字以上で、英字と数字を含める必要があります"
             />
             <TextField
               margin="dense"
@@ -373,8 +424,16 @@ const Dashboard: React.FC = () => {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpenPasswordDialog(false)}>キャンセル</Button>
-            <Button onClick={handlePasswordChange}>変更</Button>
+            <Button onClick={() => setOpenPasswordDialog(false)}>
+              キャンセル
+            </Button>
+            <Button 
+              onClick={handlePasswordChange}
+              variant="contained"
+              color="primary"
+            >
+              変更
+            </Button>
           </DialogActions>
         </Dialog>
       </Box>

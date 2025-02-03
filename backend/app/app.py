@@ -17,23 +17,14 @@ models.Base.metadata.create_all(bind=engine)
 
 app = APIRouter()  # FastAPIをAPIRouterに変更
 
-# CORSの設定
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
-
 # 画像保存用のディレクトリを作成
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# 静的ファイルのマウント
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, html=True), name="uploads")
+# 静的ファイルのマウント用のFastAPIインスタンス
+static_app = FastAPI()
+static_app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, html=True), name="uploads")
 
 @app.get("/")
 def read_root():
@@ -240,24 +231,29 @@ async def update_profile(
     db.refresh(db_user)
     return db_user
 
-@app.put("/me/password")
+@app.put("/me/password", response_model=schemas.Message)
 async def change_password(
     password_change: schemas.PasswordChange,
     current_user: models.Employee = Depends(auth.get_current_user),
     db: Session = Depends(database.get_db)
 ):
+    # 現在のパスワードを確認
     if not auth.verify_password(password_change.current_password, current_user.password):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="現在のパスワードが正しくありません"
         )
     
-    db_user = db.query(models.Employee).filter(models.Employee.id == current_user.id).first()
-    db_user.password = auth.get_password_hash(password_change.new_password)
-    db_user.temp_password = None  # 仮パスワードをクリア
+    # 新しいパスワードをハッシュ化
+    hashed_password = auth.get_password_hash(password_change.new_password)
+    
+    # パスワードを更新
+    current_user.password = hashed_password
+    current_user.temp_password = None  # 仮パスワードをクリア
     
     db.commit()
-    return {"message": "パスワードが更新されました"}
+    
+    return {"message": "パスワードが正常に更新されました"}
 
 @app.post("/upload-image")
 async def upload_image(

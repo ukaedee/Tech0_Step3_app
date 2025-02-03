@@ -13,6 +13,7 @@ from typing import List
 from app.utils.email import send_welcome_email
 import secrets
 import string
+from app.app import app as api_router
 
 # .envファイルを読み込む
 load_dotenv()
@@ -34,17 +35,15 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, html=True), name="upload
 # CORSミドルウェアの設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # フロントエンドのオリジン
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=[
-        "Content-Type",
-        "Authorization",
-        "Accept",
-        "Origin",
-        "X-Requested-With"
-    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# ルーターをマウント
+app.include_router(api_router)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

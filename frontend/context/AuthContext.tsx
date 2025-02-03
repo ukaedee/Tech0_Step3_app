@@ -99,18 +99,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [validateToken, updateAuthState])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     setIsLoading(true)
     try {
       localStorage.removeItem('access_token')
+      // Cookieも削除
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
       updateAuthState(null)
-      router.push('/login') // useRouter を使用
       console.log('Logout successful')
     } catch (error) {
       console.error('Error during logout:', error)
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
-  }, [updateAuthState, router])
+  }, [updateAuthState])
 
   const contextValue = {
     ...authState,
