@@ -13,32 +13,28 @@ const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'X-Requested-With': 'XMLHttpRequest',
   },
-  timeout: 15000, // 15秒にタイムアウトを延長
 });
 
 // リクエストインターセプター
 axiosInstance.interceptors.request.use(
   (config) => {
-    console.log('Request config:', {
-      fullUrl: `${config.baseURL}${config.url}`,
+    console.log('[Axios] リクエスト送信:', {
       method: config.method,
+      url: `${config.baseURL}${config.url}`,
       headers: config.headers,
-      data: config.data
     });
     
+    // アクセストークンをヘッダーに追加
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('Added token to request headers');
-    } else {
-      console.log('No token found in storage');
     }
+    
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
+    console.error('[Axios] リクエストエラー:', error);
     return Promise.reject(error);
   }
 );
@@ -46,26 +42,26 @@ axiosInstance.interceptors.request.use(
 // レスポンスインターセプター
 axiosInstance.interceptors.response.use(
   (response) => {
-    console.log('Response:', {
+    console.log('[Axios] レスポンス受信:', {
       status: response.status,
-      data: response.data
+      url: response.config.url,
+      data: response.data,
     });
     return response;
   },
   (error) => {
-    console.error('Response error:', {
+    console.error('[Axios] レスポンスエラー:', {
+      status: error.response?.status,
+      url: error.config?.url,
       message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
+      data: error.response?.data,
     });
 
     // 認証エラーの場合（401）
     if (error.response?.status === 401) {
-      // ローカルストレージからトークンを削除
       localStorage.removeItem('access_token');
-      
-      // ログインページにリダイレクト
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && 
+          !window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }
     }

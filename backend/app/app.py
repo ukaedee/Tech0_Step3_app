@@ -119,9 +119,8 @@ async def register_employee(
     
     return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/me", response_model=schemas.EmployeeResponse)
-async def read_users_me(current_user: models.Employee = Depends(auth.get_current_user)):
-    print(f"Getting user info for: {current_user.email}")
+@app.get("/me", response_model=schemas.Employee)
+async def read_users_me(current_user = Depends(auth.get_current_user)):
     return current_user
 
 @app.get("/employees", response_model=List[schemas.EmployeeResponse])

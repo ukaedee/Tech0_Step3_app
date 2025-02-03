@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axiosInstance from '@/lib/axios';
 import {
   Container,
   Box,
@@ -12,164 +11,156 @@ import {
   Alert,
   Paper,
 } from '@mui/material';
+import { useAuth } from '@/context/AuthContext';
+import axiosInstance from '@/lib/axios';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
-  const [error, setError] = useState('');
-  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const checkAuthAndRedirect = async () => {
+      console.log('[Login] 認証状態チェック開始:', {
+        isAuthenticated,
+        isLoading,
+        pathname: window.location.pathname
+      });
+
+      if (!isLoading && isAuthenticated && window.location.pathname === '/login') {
+        console.log('[Login] 認証済みユーザーを検知、ダッシュボードへリダイレクト開始');
+        try {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          const redirectToPath = '/dashboard';
+          try {
+            await router.replace(redirectToPath);
+            console.log('[Login] Next.jsルーターでのリダイレクト完了');
+          } catch (routerError) {
+            console.warn('[Login] Next.jsルーターでのリダイレクト失敗、window.locationを使用:', routerError);
+            window.location.href = redirectToPath;
+          }
+        } catch (error) {
+          console.error('[Login] リダイレクト処理でエラー:', error);
+        }
+      } else {
+        console.log('[Login] リダイレクト条件未満:', {
+          isLoading,
+          isAuthenticated,
+          pathname: window.location.pathname,
+          shouldRedirect: !isLoading && isAuthenticated
+        });
+      }
+    };
+
+    checkAuthAndRedirect();
+  }, [isAuthenticated, isLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    console.log('[Login] ログインフォーム送信開始');
+    setError(null);
+    setIsSubmitting(true);
 
     try {
-      // axiosInstanceの設定を確認
-      console.log('Axios config:', {
-        baseURL: axiosInstance.defaults.baseURL,
-        timeout: axiosInstance.defaults.timeout,
-        withCredentials: axiosInstance.defaults.withCredentials
-      });
+      console.log('[Login] ログインAPIを呼び出し');
+      const formBody = new URLSearchParams();
+      formBody.append('username', formData.email);
+      formBody.append('password', formData.password);
+      formBody.append('grant_type', 'password');
 
-      console.log('Login attempt:', {
-        url: '/token',
-        fullUrl: `${axiosInstance.defaults.baseURL}/token`,
-        email: formData.email,
+      const response = await axiosInstance.post('/token', formBody, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
         }
-      });
-
-      const response = await axiosInstance.post('/token', 
-        new URLSearchParams({
-          username: formData.email,
-          password: formData.password,
-          grant_type: 'password'
-        }).toString(),
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json'
-          }
-        }
-      );
-
-      console.log('Login response:', response.data);
-      
-      if (!response.data) {
-        throw new Error('レスポンスデータがありません');
-      }
-
-      const { access_token } = response.data;
-      if (!access_token) {
-        throw new Error('トークンが見つかりません');
-      }
-
-      // トークンをlocalStorageとCookieに保存
-      localStorage.setItem('access_token', access_token);
-      document.cookie = `access_token=${access_token}; path=/; max-age=86400; samesite=lax`;
-
-      // ユーザー情報を取得
-      const userResponse = await axiosInstance.get('/me', {
-        headers: { 
-          'Authorization': `Bearer ${access_token}`,
-          'Accept': 'application/json'
-        }
-      });
-
-      console.log('User info:', userResponse.data);
-      router.push('/dashboard');
-    } catch (err: any) {
-      console.error('Login error:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        config: err.config
       });
       
-      if (err.message === 'Network Error') {
-        setError('サーバーに接続できません。ネットワーク接続を確認してください。');
+      console.log('[Login] ログインAPI成功、トークンを保存開始');
+      const loginSuccess = await login(response.data.access_token);
+      
+      if (loginSuccess) {
+        console.log('[Login] ログイン成功、ダッシュボードにリダイレクト開始');
+        router.replace('/dashboard'); // ログイン後即時リダイレクト
       } else {
-        setError('メールアドレスまたはパスワードが正しくありません');
+        console.log('[Login] ログイン失敗');
+        setError('ログイン処理に失敗しました。もう一度お試しください。');
       }
+    } catch (error: any) {
+      console.error('[Login] ログイン処理でエラー:', error);
+      setError(
+        error.response?.data?.detail || 
+        'ログインに失敗しました。メールアドレスとパスワードを確認してください。'
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  const handleAdminClick = () => {
-    window.location.href = '/admin/login';
-  };
+  if (isLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <Typography>Loading...</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Container maxWidth="sm">
-      <Box sx={{ mt: 8, mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center">
-          従業員ログイン
-        </Typography>
-        
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+      <Box sx={{ mt: 8 }}>
+        <Paper sx={{ p: 4 }}>
+          <Typography variant="h4" component="h1" gutterBottom align="center">
+            ログイン
+          </Typography>
+          
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-        <Paper sx={{ p: 3 }}>
           <form onSubmit={handleSubmit}>
             <TextField
               margin="normal"
               required
               fullWidth
+              id="email"
               label="メールアドレス"
               name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
+              autoComplete="email"
               autoFocus
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              disabled={isSubmitting}
             />
             <TextField
               margin="normal"
               required
               fullWidth
-              label="パスワード"
               name="password"
+              label="パスワード"
               type="password"
+              id="password"
+              autoComplete="current-password"
               value={formData.password}
-              onChange={handleChange}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              disabled={isSubmitting}
             />
             <Button
               type="submit"
               fullWidth
               variant="contained"
               sx={{ mt: 3, mb: 2 }}
+              disabled={isSubmitting}
             >
-              ログイン
+              {isSubmitting ? 'ログイン中...' : 'ログイン'}
             </Button>
           </form>
         </Paper>
-
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <Button
-            onClick={handleAdminClick}
-            sx={{
-              color: '#1976d2',
-              '&:hover': {
-                backgroundColor: 'transparent',
-                textDecoration: 'underline'
-              }
-            }}
-          >
-            管理者の方はこちら
-          </Button>
-        </Box>
       </Box>
     </Container>
   );

@@ -9,11 +9,18 @@ export default function Page() {
   const pathname = usePathname();
 
   useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    
     // 現在のパスがルートの場合のみリダイレクト
     if (pathname === '/') {
-      router.push('/login');
-}
+      if (token) {
+        router.push('/dashboard');
+      } else {
+        router.push('/login');
+      }
+    }
   }, [pathname, router]);
+
   return (
     <Box sx={{ 
       display: 'flex', 

@@ -56,7 +56,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      router.push('/register');
+      router.push('/admin/register');
     } catch (err: any) {
       console.error('Login error:', err);
       setError('メールアドレスまたはパスワードが正しくありません');
