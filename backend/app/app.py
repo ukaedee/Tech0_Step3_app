@@ -15,16 +15,13 @@ from fastapi.staticfiles import StaticFiles
 
 models.Base.metadata.create_all(bind=engine)
 
-app = APIRouter()  # FastAPIをAPIRouterに変更
-
 # 画像保存用のディレクトリを作成
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR)
 
-# 静的ファイルのマウント用のFastAPIインスタンス
-static_app = FastAPI()
-static_app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, html=True), name="uploads")
+# APIRouterのインスタンスを作成
+app = APIRouter()
 
 @app.get("/")
 def read_root():

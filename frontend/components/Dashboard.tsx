@@ -29,11 +29,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // アイコンURLを修正する関数
 const getFullIconUrl = (iconUrl: string | undefined) => {
-  if (!iconUrl) return undefined;
+  if (!iconUrl) return '';
   if (iconUrl.startsWith('http')) return iconUrl;
-  // APIのベースURLを使用して完全なURLを生成
+  // バックエンドのURLを使用
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-  return `${baseUrl}${iconUrl}`;
+  // /uploadsで始まるパスの場合はそのまま使用
+  if (iconUrl.startsWith('/uploads/')) {
+    return `${baseUrl}${iconUrl}`;
+  }
+  // その他のパスの場合は/uploadsを付加
+  return `${baseUrl}/uploads${iconUrl}`;
 };
 
 interface UserInfo {
@@ -47,6 +52,7 @@ interface UserInfo {
 
 const Dashboard: React.FC = () => {
   const { logout } = useAuth();
+  const [isClient, setIsClient] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [employees, setEmployees] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,36 +74,52 @@ const Dashboard: React.FC = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const router = useRouter();
 
+  // クライアントサイドでのみレンダリングを行うための処理
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
     const fetchData = async () => {
       try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
         const [userResponse, employeesResponse] = await Promise.all([
           axiosInstance.get('/me'),
           axiosInstance.get('/employees'),
         ]);
 
-        console.log('User info:', userResponse.data);
-        console.log('Employees:', employeesResponse.data);
-
-        setUserInfo(userResponse.data);
-        setEmployees(employeesResponse.data);
+        if (mounted) {
+          setUserInfo(userResponse.data);
+          setEmployees(employeesResponse.data);
+          setLoading(false);
+        }
       } catch (err: any) {
         console.error('Error fetching data:', err);
-        setError('情報の取得に失敗しました');
-        if (err.response?.status === 401) {
-          router.push('/login');
+        if (mounted) {
+          setError('情報の取得に失敗しました');
+          if (err.response?.status === 401) {
+            router.push('/login');
+          }
         }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    if (!localStorage.getItem('access_token')) {
-      router.push('/login');
-      return;
-    }
-
     fetchData();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   const handleLogout = async () => {
@@ -105,36 +127,68 @@ const Dashboard: React.FC = () => {
       // まずログアウト処理を実行
       await logout();
       
-      // 少し待ってからリダイレクト
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // ローカルストレージとCookieをクリア
+      localStorage.removeItem('access_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
       
-      // window.locationを使用して強制的にリダイレクト
-      window.location.href = '/login';
+      // 状態をリセット
+      setUserInfo(null);
+      setEmployees([]);
+      
+      // リダイレクト
+      window.location.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);
-      // エラーが発生しても強制的にリダイレクト
-      window.location.href = '/login';
+      window.location.replace('/login');
     }
   };
 
   const handleProfileUpdate = async () => {
     try {
-      const token = localStorage.getItem('access_token');
-      const updatedProfile = {
+      // 現在の状態をログ出力
+      console.log('Current profile state:', {
+        profile,
+        tempIconUrl,
+        userInfo
+      });
+      
+      // アップロードされた画像のURLから相対パスを抽出
+      let relativeIconUrl = profile.icon_url;
+      if (tempIconUrl) {
+        // /uploadsから始まるパスを抽出
+        const match = tempIconUrl.match(/\/uploads\/.+/);
+        if (match) {
+          relativeIconUrl = match[0];
+        }
+      }
+
+      console.log('Updating profile with:', {
         department: profile.department,
-        icon_url: tempIconUrl || profile.icon_url,
-      };
-      await axiosInstance.put(
+        icon_url: relativeIconUrl,
+        originalIconUrl: profile.icon_url,
+        tempIconUrl
+      });
+
+      const response = await axiosInstance.put(
         '/me/profile',
-        updatedProfile,
         {
-          headers: { Authorization: `Bearer ${token}` },
+          department: profile.department,
+          icon_url: relativeIconUrl
         }
       );
-      setUserInfo(prev => prev ? { ...prev, ...updatedProfile } : null);
+
+      console.log('Profile update response:', response.data);
+
+      // 更新後のユーザー情報を取得
+      const userResponse = await axiosInstance.get('/me');
+      console.log('Updated user info:', userResponse.data);
+      
+      setUserInfo(userResponse.data);
       setTempIconUrl(null);
       setOpenProfileDialog(false);
+      setError('');
     } catch (err) {
+      console.error('Profile update error:', err);
       setError('プロフィールの更新に失敗しました');
     }
   };
@@ -209,24 +263,32 @@ const Dashboard: React.FC = () => {
       // 自動アップロード
       try {
         setUploadProgress(true);
-        const token = localStorage.getItem('access_token');
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await axiosInstance.post(
-          '/upload-image',
-          formData,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'multipart/form-data',
-            },
-          }
-        );
+        console.log('Uploading image...');
+        const response = await axiosInstance.post('/upload-image', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
 
-        setTempIconUrl(response.data.url);
+        console.log('Upload response:', response.data);
+        
+        // レスポンスから完全なURLを設定
+        const uploadedUrl = getFullIconUrl(response.data.url);
+        console.log('Setting temp icon URL:', uploadedUrl);
+        setTempIconUrl(uploadedUrl);
+        
+        // プロフィールの状態も更新
+        setProfile(prev => ({
+          ...prev,
+          icon_url: response.data.url // バックエンドから返された相対パスを保存
+        }));
+
         setSelectedFile(null);
       } catch (err) {
+        console.error('Upload error:', err);
         setError('画像のアップロードに失敗しました');
       } finally {
         setUploadProgress(false);
@@ -242,7 +304,36 @@ const Dashboard: React.FC = () => {
     setTempIconUrl(null);
   };
 
-  if (loading) {
+  // プロフィール編集ダイアログを開く処理
+  const handleOpenProfileDialog = () => {
+    // 現在のユーザー情報からプロフィールの初期値を設定
+    if (userInfo) {
+      const currentIconUrl = userInfo.icon_url || '';
+      console.log('Opening profile dialog with current user info:', {
+        department: userInfo.department,
+        icon_url: currentIconUrl,
+        fullIconUrl: getFullIconUrl(currentIconUrl)
+      });
+
+      setProfile({
+        department: userInfo.department || '',
+        icon_url: currentIconUrl
+      });
+      // 現在のアイコンURLをtempIconUrlにも設定
+      setTempIconUrl(getFullIconUrl(currentIconUrl));
+    }
+    setOpenProfileDialog(true);
+  };
+
+  // アバターに表示する画像URLを取得する関数
+  const getDisplayIconUrl = () => {
+    if (previewUrl) return previewUrl;
+    if (tempIconUrl) return tempIconUrl;
+    return getFullIconUrl(userInfo?.icon_url);
+  };
+
+  // ローディング中またはサーバーサイドレンダリング時は最小限の表示
+  if (!isClient || loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
         <CircularProgress />
@@ -289,7 +380,7 @@ const Dashboard: React.FC = () => {
             <Box sx={{ mt: 2 }}>
               <Button
                 variant="outlined"
-                onClick={() => setOpenProfileDialog(true)}
+                onClick={handleOpenProfileDialog}
                 sx={{ mr: 1 }}
               >
                 プロフィール編集
@@ -346,7 +437,7 @@ const Dashboard: React.FC = () => {
               {/* 現在のアイコンまたはプレビュー */}
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                 <Avatar
-                  src={previewUrl || tempIconUrl || userInfo?.icon_url}
+                  src={getDisplayIconUrl()}
                   sx={{ width: 150, height: 150 }}
                 />
               </Box>
